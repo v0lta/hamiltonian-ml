@@ -1,0 +1,1 @@
+# TODO simulate https://en.wikipedia.org/wiki/Black%E2%80%93Scholes_equation
