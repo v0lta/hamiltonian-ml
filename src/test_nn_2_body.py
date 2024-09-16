@@ -13,7 +13,7 @@ def test_net(network, seed = 1):
     m1=1.
     m2=1.
     std = 0.005
-    t_max = 800
+    t_max = 600
 
     init = [np.array([0., 0.]),
             np.array([0., .97]),

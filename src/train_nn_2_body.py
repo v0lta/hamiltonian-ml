@@ -53,13 +53,13 @@ def generate_data(epoch, iterations, batch_size, seed = 0):
 if __name__ == '__main__':
     torch.manual_seed(42)
 
-    epochs = 10
+    epochs = 20
     batch_size = 200
     iterations = 15
     
     data = generate_data(epochs, iterations, batch_size, seed=0)
 
-    network = Feedforward(2*4, 200, 2*4)
+    network = Feedforward(2*4, 512, 2*4)
     opt = torch.optim.Adam(network.parameters(), lr=1e-3)
     loss_fun = torch.nn.MSELoss()
     conserve = True
@@ -83,9 +83,9 @@ if __name__ == '__main__':
                 def get_kinetic_energy(velocity, mass=1.):
                     return 0.5*mass*torch.sum(velocity**2, dim=-1)
 
-                norm = lambda v: torch.sqrt(torch.sum(v**2, dim=-1))
+                norm = lambda v: torch.sum(v**2, dim=-1)
                 def get_potential_energy(r, const_g=1, m1=1., m2=.1):
-                    return -const_g*m1*m2/norm(r)
+                    return -const_g*m1*m2/(norm(r) + 1e-9)
 
                 if conserve:
                     p1_init, p2_init, v1_init, v2_init = torch.split(input_x, 1, dim=1)
