@@ -49,8 +49,8 @@ def test_net(network, seed = 1):
 
 if __name__ == '__main__':
 
-    network = torch.load("network.pt")
-    loss, net_out, sim_out = test_net(network, -1)
+    network = torch.load("network_cTrue.pt")
+    loss, net_out, sim_out = test_net(network, 2)
     print(f"loss: {float(loss.detach().numpy()):2.2f}")
     net_out_numpy = net_out.detach().numpy()
     net_p1, net_p2, net_v1, net_v2 = (net_out_numpy[i] for i in range(4))

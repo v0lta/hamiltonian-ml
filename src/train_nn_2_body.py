@@ -60,7 +60,7 @@ if __name__ == '__main__':
     data = generate_data(epochs, iterations, batch_size, seed=0)
 
     network = Feedforward(2*4, 200, 2*4)
-    opt = torch.optim.Adam(network.parameters())
+    opt = torch.optim.Adam(network.parameters(), lr=1e-3)
     loss_fun = torch.nn.MSELoss()
     conserve = True
 
@@ -68,6 +68,7 @@ if __name__ == '__main__':
         epoch_data = data[e]
         epoch_bar = tqdm(range(iterations), desc="Epoch progress", leave=False)
         for i in epoch_bar:
+            # TODO build pairs and shuffle.
             bar = tqdm(range(epoch_data[i].shape[-1] - 1), desc="Time Loop", leave=False)
             for t in bar:
                 opt.zero_grad()
@@ -88,11 +89,11 @@ if __name__ == '__main__':
 
                 if conserve:
                     p1_init, p2_init, v1_init, v2_init = torch.split(input_x, 1, dim=1)
-                    p1_pred, p2_pred, v1_pred, v2_pred = torch.split(output_y_hat, 1, dim=1)
                     kin_energy_init = get_kinetic_energy(v1_init) + get_kinetic_energy(v2_init) 
                     pot_energy_init = get_potential_energy(p2_init - p1_init)
                     tot_energy_init = kin_energy_init + pot_energy_init
 
+                    p1_pred, p2_pred, v1_pred, v2_pred = torch.split(output_y_hat, 1, dim=1)
                     kin_energy_pred = get_kinetic_energy(v1_pred) + get_kinetic_energy(v2_pred) 
                     pot_energy_pred = get_potential_energy(p2_pred - p1_pred)
                     tot_energy_pred = kin_energy_pred + pot_energy_pred
