@@ -14,6 +14,31 @@ def get_kinetic_energy(mass, velocity):
 def get_potential_energy(const_g, m1, m2, r):
     return -const_g*m1*m2/norm(r)
 
+
+def absolute_motion(_, y, G=1., m1=1., m2=1.):
+    """Compute motion from the forces of gravity.
+    
+    Fg = G (m1 m2)/(r**2)
+    F = ma
+    a = F/m
+    See also: https://orbital-mechanics.space/the-n-body-problem/two-body-inertial-numerical-solution.html
+    """
+    p1, p2, v1, v2 = np.split(y, 4)
+    dist_r = p2 - p1
+
+    # get gravitational forces
+    grav = get_grav_force(G, m1, m2, dist_r)
+    # add direction
+    fg1 = grav * dist_r / norm(dist_r)
+    fg2 = - fg1
+    
+    a1 = fg1/m1
+    a2 = fg2/m2
+    # pos1, pos2, vel1, vel2 turn into their integrated counterparts.
+    ydot = np.concatenate([v1, v2, a1, a2])
+    return ydot
+
+
 def simulate(init, seed = -1, std = 0.05, G=1., m1=1, m2=1, t_max=500.):
     if seed >= 0:
         rng = np.random.default_rng(seed)
@@ -23,35 +48,10 @@ def simulate(init, seed = -1, std = 0.05, G=1., m1=1, m2=1, t_max=500.):
     dt = 0.01
     t_0 = 0.
     steps = int(t_max/dt)
-    print(f"Number of steps: {steps}")
     t_points = np.linspace(t_0, t_max, steps)
     y0 = np.concatenate([p1, p2, v1, v2])
 
-    def absolute_motion(_, y):
-        """Compute motion from the forces of gravity.
-        
-        Fg = G (m1 m2)/(r**2)
-        F = ma
-        a = F/m
-        See also: https://orbital-mechanics.space/the-n-body-problem/two-body-inertial-numerical-solution.html
-        """
-        p1, p2, v1, v2 = np.split(y, 4)
-        dist_r = p2 - p1
-
-        # get gravitational forces
-        grav = get_grav_force(G, m1, m2, dist_r)
-        # add direction
-        fg1 = grav * dist_r / norm(dist_r)
-        fg2 = - fg1
-        
-        a1 = fg1/m1
-        a2 = fg2/m2
-        # pos1, pos2, vel1, vel2 turn into their integrated counterparts.
-        ydot = np.concatenate([v1, v2, a1, a2])
-        return ydot
-
     sol = solve_ivp(absolute_motion, [t_0, t_max], y0, t_eval=t_points)
-    print(sol.message)
     p1, p2, v1, v2 = np.split(sol.y, 4)
     return p1, p2, v1, v2, t_points, sol.success
 
@@ -75,6 +75,7 @@ if __name__ == '__main__':
         p1, p2, v1, v2, t_points, _ = r
 
         # plot position
+        plt.title("Position")
         plt.plot(p1[0, :], p1[1, :])
         plt.plot(p2[0, :], p2[1, :])
         plt.show()

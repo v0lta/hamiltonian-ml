@@ -4,6 +4,7 @@ from sim_2_body import simulate, get_potential_energy, get_kinetic_energy
 import numpy as np
 
 import matplotlib
+from tqdm import tqdm
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -50,11 +51,14 @@ init = [np.array([0., 0.]),
         np.array([1., 0.]),
         np.array([-1., 0.])]
 p1, p2, v1, v2, t_points, _ = simulate(init, seed = - 1, std = std, G=G, m1=m1, m2=m2, t_max=t_max)
-t_points = t_points[::25]
-p1 = p1[:, ::25]
-p2 = p2[:, ::25]
-v1 = v1[:, ::25]
-v2 = v2[:, ::25]
+
+nskip = 50
+
+t_points = t_points[::nskip]
+p1 = p1[:, ::nskip]
+p2 = p2[:, ::nskip]
+v1 = v1[:, ::nskip]
+v2 = v2[:, ::nskip]
 
 potential_energy = np.array([get_potential_energy(G, m1, m2, cp2-cp1) for cp1, cp2 in zip(p1.swapaxes(0, 1), p2.swapaxes(0, 1))])
 kinetic_energy1 = np.array([get_kinetic_energy(m1, cv1) for cv1 in v1.T])
@@ -65,7 +69,7 @@ total_energy = potential_energy + kinetic_energy
 
 
 with writer.saving(fig, "two_body_sim.mp4", 100):
-    for i in range(1, len(p1[0])):
+    for i in tqdm(range(1, len(p1[0])), desc='Writing movie'):
         plot_l1.set_data(p1[0, :i], p1[1, :i])
         plot_l2.set_data(p2[0, :i], p2[1, :i])
         plot_p1.set_data([p1[0, i]], [p1[1, i]])
