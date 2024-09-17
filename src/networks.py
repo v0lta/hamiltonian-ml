@@ -13,13 +13,15 @@ class Feedforward(torch.nn.Module):
 
         self.activation = torch.nn.Tanh()
 
-    def forward(self, x):
-        h = self.activation(self.linear1(x))
-        h = self.activation(self.linear2(h))
-        return x + self.linear3(h)
+    def forward(self, x, dt=0.5):
+        return x + dt*self.dxdt(x)
 
 
     def dxdt(self, x):
-        h = self.activation(self.linear1(x))
+        batch_size, vars, dims = x.shape
+        x_re = torch.reshape(x, [batch_size, -1]).unsqueeze(1)
+        h = self.activation(self.linear1(x_re))
         h = self.activation(self.linear2(h))
-        return self.linear3(h)
+        h = self.linear3(h)
+        h = torch.reshape(h, [batch_size, vars, dims])
+        return h

@@ -40,16 +40,17 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
 
 
 def simulate(init, seed = -1, std = 0.05, G=1., m1=1, m2=1, t_max=500.):
+    #     p1, p2, v1, v2 = init
     if seed >= 0:
         rng = np.random.default_rng(seed)
         init = [i_el + rng.normal(0, std, size=i_el.shape) for i_el in init]
         
-    p1, p2, v1, v2 = init
-    dt = 0.01
+
+    dt = 0.5
     t_0 = 0.
     steps = int(t_max/dt)
     t_points = np.linspace(t_0, t_max, steps)
-    y0 = np.concatenate([p1, p2, v1, v2])
+    y0 = np.concatenate(init)
 
     sol = solve_ivp(absolute_motion, [t_0, t_max], y0, t_eval=t_points)
     p1, p2, v1, v2 = np.split(sol.y, 4)
@@ -68,8 +69,9 @@ if __name__ == '__main__':
             np.array([1., 0.]),
             np.array([-1., 0.])]
 
-    res = [simulate(init, seed = seed - 1, std = std, G=G, m1=m1, m2=m2, t_max=t_max) for seed in range(50)]
+    res = [simulate(init, seed = seed - 1, std = std, G=G, m1=m1, m2=m2, t_max=t_max) for seed in range(5)]
     res = list(filter(lambda r: r[-1] == True, res))
+    print(f"{len(res)}")
 
     for r in res:
         p1, p2, v1, v2, t_points, _ = r
@@ -94,4 +96,15 @@ if __name__ == '__main__':
         plt.plot(t_points, total_energy, label='total')
         plt.legend()
         plt.show()
+
+
+        y = np.concatenate([p1, p2, v1, v2])
+        ydot = absolute_motion(_, y)
+        ydot_est = np.stack([(y[:, t] - y[:, t-1])/0.5 for t in range(1, y.shape[-1])], -1)
+        plt.semilogy(np.mean(np.abs(ydot), axis=0))
+        plt.semilogy(np.mean(np.abs(ydot_est), axis=0))
+        plt.semilogy(np.mean(np.abs(ydot[:, 1:] - ydot_est), axis=0))
+        plt.show()
+        pass
+
     pass

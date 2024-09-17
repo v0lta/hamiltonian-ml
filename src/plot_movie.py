@@ -52,7 +52,7 @@ init = [np.array([0., 0.]),
         np.array([-1., 0.])]
 p1, p2, v1, v2, t_points, _ = simulate(init, seed = - 1, std = std, G=G, m1=m1, m2=m2, t_max=t_max)
 
-nskip = 50
+nskip = 1
 
 t_points = t_points[::nskip]
 p1 = p1[:, ::nskip]

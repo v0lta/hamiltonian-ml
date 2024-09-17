@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sim_2_body import simulate
+from scipy.integrate import solve_ivp
 
 import torch
 import numpy as np
@@ -8,12 +9,15 @@ from networks import Feedforward
 from sim_2_body import simulate, get_kinetic_energy, get_potential_energy
 
 
-def test_net(network, seed = 1):
+
+
+def test_net(network, seed = -1):
     G=1.
     m1=1.
     m2=1.
+    t_0 = 0.
     std = 0.005
-    t_max = 600
+    t_max = 800
 
     init = [np.array([0., 0.]),
             np.array([0., .97]),
@@ -23,7 +27,7 @@ def test_net(network, seed = 1):
     sim = simulate(init, seed = seed, std = std, G=G, m1=m1, m2=m2, t_max=t_max)
     p1, p2, v1, v2, t_points, _ = sim
 
-    skip = 50
+    skip = 1
     p1 = p1[:, ::skip]
     p2 = p2[:, ::skip]
     v1 = v1[:, ::skip]
@@ -31,37 +35,53 @@ def test_net(network, seed = 1):
     t_points = t_points[::skip]
     sim_out = ([p1, p2, v1, v2, t_points])
 
-    data = np.array([p1, p2, v1, v2])
+    y0 = np.expand_dims(np.stack(init), 0)
 
-    loss_fun = torch.nn.MSELoss()
+    def modelwrap(_, y):
+        y = np.reshape(y, y0.shape)
+        y = torch.tensor(y.astype(np.float32))
+        with torch.no_grad():
+            ydot = network.dxdt(y)
+        ydot = ydot.numpy()
+        return ydot.flatten()
 
-    input_x = torch.tensor(data.astype(np.float32))
-    output_y_net = [input_x[:, :, 0].flatten().unsqueeze(0)]
-    for _ in range(input_x.shape[-1]-1):
+
+    # sol = solve_ivp(modelwrap, [t_0, t_max], y0.flatten(), t_eval=t_points)
+    # p1, p2, v1, v2 = np.split(sol.y, 4)
+    # net_out = (p1, p2, v1, v2)
+    
+
+    input_x = torch.tensor(y0.astype(np.float32))
+    output_y_net = [input_x]
+    for _ in range(t_points.shape[-1]-1):
         out = network(output_y_net[-1])
         output_y_net.append(out)
-
-    output_y_net = [torch.reshape(y_el, [4, 2]) for y_el in output_y_net]
-    net_out = torch.stack(output_y_net, -1)
-    loss = loss_fun(input_x, net_out)
+    output_y_net = [torch.squeeze(y_el, 0) for y_el in output_y_net]
+    net_out = torch.stack(output_y_net, -1).detach().numpy()
+    
+    loss = sum(np.sum((net - sim)**2) for net, sim in zip(net_out, sim_out))
     return loss, net_out, sim_out
 
 
 if __name__ == '__main__':
-
-    network = torch.load("network_cTrue.pt")
-    loss, net_out, sim_out = test_net(network, 2)
-    print(f"loss: {float(loss.detach().numpy()):2.2f}")
-    net_out_numpy = net_out.detach().numpy()
+    seed = 2
+    network = torch.load("network_cFalse.pt")
+    loss, net_out, sim_out = test_net(network, seed)
+    print(f"loss: {float(loss):2.2f}")
+    net_out_numpy = net_out
     net_p1, net_p2, net_v1, net_v2 = (net_out_numpy[i] for i in range(4))
     p1, p2, v1, v2, t_points = sim_out
 
     # plot position
-    plt.plot(p1[0, :], p1[1, :])
-    plt.plot(p2[0, :], p2[1, :])
+    plt.plot(p1[0, :], p1[1, :], 'b')
+    plt.plot(p1[0, 0], p1[1, 0], 'b.')
+    plt.plot(p2[0, :], p2[1, :], 'g')
+    plt.plot(p2[0, 0], p2[1, 0], 'g.')
 
-    plt.plot(net_p1[0, :], net_p1[1, :])
-    plt.plot(net_p2[0, :], net_p2[1, :])
+    plt.plot(net_p1[0, :], net_p1[1, :], 'c')
+    plt.plot(net_p1[0, 0], net_p1[1, 0], '.c')
+    plt.plot(net_p2[0, :], net_p2[1, :], 'm')
+    plt.plot(net_p2[0, 0], net_p2[1, 0], '.m')
     plt.show()
 
     # plot energy over time
@@ -77,6 +97,7 @@ if __name__ == '__main__':
     plt.plot(t_points, potential_energy, label='potential')
     plt.plot(t_points, kinetic_energy, label='kinetic')
     plt.plot(t_points, total_energy, label='total')
+    plt.ylim([-1.1, 1.1])
     plt.legend()
     plt.show()
     pass
