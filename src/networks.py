@@ -8,9 +8,6 @@ class Feedforward(torch.nn.Module):
         self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.linear3 = torch.nn.Linear(hidden_dim, output_dim, bias=None)
 
-        for l in [self.linear1, self.linear2, self.linear3]:
-            torch.nn.init.orthogonal_(l.weight) # use a principled initialization
-
         self.activation = torch.nn.Tanh()
 
     def forward(self, x, dt=0.5):

@@ -16,8 +16,9 @@ def test_net(network, seed = -1):
     m1=1.
     m2=1.
     t_0 = 0.
-    std = 0.005
-    t_max = 800
+    std = 0.0025
+    t_max = 600
+    dt = 0.5
 
     init = [np.array([0., 0.]),
             np.array([0., .97]),
@@ -37,13 +38,13 @@ def test_net(network, seed = -1):
 
     y0 = np.expand_dims(np.stack(init), 0)
 
-    def modelwrap(_, y):
-        y = np.reshape(y, y0.shape)
-        y = torch.tensor(y.astype(np.float32))
-        with torch.no_grad():
-            ydot = network.dxdt(y)
-        ydot = ydot.numpy()
-        return ydot.flatten()
+    # def modelwrap(_, y):
+    #     y = np.reshape(y, y0.shape)
+    #     y = torch.tensor(y.astype(np.float32))
+    #     with torch.no_grad():
+    #         ydot = network.dxdt(y)
+    #     ydot = ydot.numpy()
+    #     return ydot.flatten()
 
 
     # sol = solve_ivp(modelwrap, [t_0, t_max], y0.flatten(), t_eval=t_points)
@@ -54,7 +55,7 @@ def test_net(network, seed = -1):
     input_x = torch.tensor(y0.astype(np.float32))
     output_y_net = [input_x]
     for _ in range(t_points.shape[-1]-1):
-        out = network(output_y_net[-1])
+        out = output_y_net[-1] + dt*network.dxdt(output_y_net[-1])
         output_y_net.append(out)
     output_y_net = [torch.squeeze(y_el, 0) for y_el in output_y_net]
     net_out = torch.stack(output_y_net, -1).detach().numpy()

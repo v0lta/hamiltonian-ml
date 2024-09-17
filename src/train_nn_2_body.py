@@ -23,8 +23,8 @@ def generate_data(epoch, iterations, batch_size, seed = 0):
         G=1.
         m1=1.
         m2=1.
-        std = 0.005
-        t_max = 800
+        std = 0.0025
+        t_max = 600
         seed_offset = 0
 
         init = [np.array([0., 0.]),
@@ -103,7 +103,7 @@ if __name__ == '__main__':
                 # p1, p2, v1, v2
                 dp_dt, dq_dt = torch.split(dx_dt, 2, dim=1)
                 conservation_loss = loss_fun(dq_dt, -dh_dp) + loss_fun(dp_dt, dh_dq)
-                # conservation_loss = loss_fun(dxdt_hat, dx_dt)
+                pred_loss = loss_fun(dxdt_hat, dx_dt)
 
                 if conserve:
                     loss = pred_loss * 0.1*conservation_loss

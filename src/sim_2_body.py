@@ -39,14 +39,13 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
     return ydot
 
 
-def simulate(init, seed = -1, std = 0.05, G=1., m1=1, m2=1, t_max=500.):
+def simulate(init, seed = -1, std = 0.025, G=1., m1=1, m2=1, t_max=500., dt = 0.5):
     #     p1, p2, v1, v2 = init
     if seed >= 0:
         rng = np.random.default_rng(seed)
         init = [i_el + rng.normal(0, std, size=i_el.shape) for i_el in init]
         
 
-    dt = 0.5
     t_0 = 0.
     steps = int(t_max/dt)
     t_points = np.linspace(t_0, t_max, steps)
@@ -61,8 +60,8 @@ if __name__ == '__main__':
     G=1.
     m1=1.
     m2=1.
-    std = 0.005
-    t_max = 800
+    std = 0.0025
+    t_max = 600
 
     init = [np.array([0., 0.]),
             np.array([0., .97]),
