@@ -51,6 +51,23 @@ def generate_data(epoch, iterations, batch_size, seed = 0):
         return data
 
 
+def get_hamiltonian(in_x, network, motion_fun):
+    
+
+    dx_dt_hat = network.dxdt(in_x)
+    dx_dt = torch.tensor(motion_fun(in_x.detach().cpu().numpy())).cuda()
+    
+    dh_dx = torch.autograd.grad(dx_dt_hat.sum(), in_x, create_graph=True)[0]
+    dh_dp, dh_dq = torch.split(dh_dx, 2, dim=1)
+
+    # dxdt = (output_y - input_x)/0.5
+    # p1, p2, v1, v2
+    loss_fun = torch.nn.MSELoss()
+    dp_dt, dq_dt = torch.split(dx_dt, 2, dim=1)
+    conservation_loss = loss_fun(dq_dt, -dh_dp) + loss_fun(dp_dt, dh_dq)
+                
+    return conservation_loss, dx_dt_hat, dx_dt
+
 
 
 if __name__ == '__main__':
@@ -68,7 +85,8 @@ if __name__ == '__main__':
     opt = torch.optim.Adam(network.parameters(), lr=1e-3)
     # opt = torch.optim.rmsprop(network.parameters(), lr=1e-4)
     loss_fun = torch.nn.MSELoss()
-    conserve = True
+    conserve = False
+    print(f"energy conservation: {conserve}")
 
     for e in tqdm(range(epochs), desc="Training Network"):
         epoch_data = data[e]
@@ -86,28 +104,16 @@ if __name__ == '__main__':
                 if input_x.grad:
                     input_x.grad.zero_()
 
-                dxdt_hat = network.dxdt(input_x)
-                output_y_hat = input_x + dt*dxdt_hat
-                pred_loss = loss_fun(output_y, output_y_hat)
+                motion_fun = lambda x: absolute_motion(None, x)
+                conservation_loss, dx_dt_hat, dx_dt = get_hamiltonian(input_x, network, motion_fun)
 
-                conservation_loss = torch.tensor(0.)
-                
-                # x is p (position) in hamiltonian terms and v is q.
-                # dpdt_hat, dqdt_hat = torch.split(dxdt_hat, 2, dim=1)
-                
-                dh_dx = torch.autograd.grad(dxdt_hat.sum(), input_x, create_graph=True)[0]
-                dh_dp, dh_dq = torch.split(dh_dx, 2, dim=1)
-
-                # dxdt = (output_y - input_x)/0.5
-                dx_dt = torch.tensor(absolute_motion(None, epoch_data[i][:, :, :, t]).swapaxes(0, 1)).cuda()
-                # p1, p2, v1, v2
-                dp_dt, dq_dt = torch.split(dx_dt, 2, dim=1)
-                conservation_loss = loss_fun(dq_dt, -dh_dp) + loss_fun(dp_dt, dh_dq)
-                pred_loss = loss_fun(dxdt_hat, dx_dt)
+                pred_loss = loss_fun(dx_dt_hat, dx_dt)
 
                 if conserve:
                     loss = pred_loss * 0.1*conservation_loss
                 else:
+                    y_hat = input_x + dt*dx_dt_hat
+                    pred_loss = loss_fun(output_y, y_hat)
                     loss = pred_loss
                 loss.backward()
                 opt.step()

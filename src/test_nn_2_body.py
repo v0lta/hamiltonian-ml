@@ -60,12 +60,12 @@ def test_net(network, seed = -1):
     output_y_net = [torch.squeeze(y_el, 0) for y_el in output_y_net]
     net_out = torch.stack(output_y_net, -1).detach().numpy()
     
-    loss = sum(np.sum((net - sim)**2) for net, sim in zip(net_out, sim_out))
+    loss = np.mean(list(np.mean((net - sim)**2) for net, sim in zip(net_out, sim_out)))
     return loss, net_out, sim_out
 
 
 if __name__ == '__main__':
-    seed = 2
+    seed = 1
     network = torch.load("network_cFalse.pt")
     loss, net_out, sim_out = test_net(network, seed)
     print(f"loss: {float(loss):2.2f}")
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     plt.plot(t_points, potential_energy, label='potential')
     plt.plot(t_points, kinetic_energy, label='kinetic')
     plt.plot(t_points, total_energy, label='total')
-    plt.ylim([-1.1, 1.1])
+    # plt.ylim([-1.1, 1.1])
     plt.legend()
     plt.show()
     pass
