@@ -36,7 +36,7 @@ std = 0.005
 t_max = 800
 
 axs[0].set_title("Position")
-axs[0].set_xlim(-20, 20)
+axs[0].set_xlim(-5, 5)
 axs[0].set_ylim(-20, 20)
 
 axs[1].set_title("Energy")
