@@ -39,11 +39,20 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
     return ydot
 
 
-def simulate(init, seed = -1, std = 0.025, G=1., m1=1, m2=1, t_max=500., dt = 1):
+def simulate(init, seed = -1, std = 0.05, t_max=50., dt = 0.5):
     #     p1, p2, v1, v2 = init
+    # shift the position of the ring.
+    p1 = init[0]
+    p2 = init[1]
+    dist = p2 - p1
     if seed >= 0:
         rng = np.random.default_rng(seed)
-        init = [i_el + rng.normal(0, std, size=i_el.shape) for i_el in init]
+        p1_new = p1 + rng.normal(scale=std, size=[2])
+    else:
+        p1_new = p1
+    p2_new = p1_new + dist
+    v1, v2 = get_v_circ(p1, p2)
+    init = [p1_new, p2_new, v1, v2]
         
     t_0 = 0.
     steps = int(t_max/dt)
@@ -52,29 +61,47 @@ def simulate(init, seed = -1, std = 0.025, G=1., m1=1, m2=1, t_max=500., dt = 1)
 
     sol = solve_ivp(absolute_motion, [t_0, t_max], y0, t_eval=t_points)
     p1, p2, v1, v2 = np.split(sol.y, 4)
-    return p1, p2, v1, v2, t_points, sol.success
+    return p1, p2, v1, v2, t_points, sol.success, y0
 
+
+def get_v_circ(p1, p2):
+    d = p2 - p1
+    r = np.sqrt( np.sum(d **2))
+    v = np.sqrt( 1/r ) / 2.
+
+    v1 = v*np.flipud(d)/norm(d)
+    v2 = -v*np.flipud(d)/norm(d)
+    return v1, v2
 
 if __name__ == '__main__':
     G=1.
     m1=1.
     m2=1.
-    std = 0.00015
-    t_max = 600
+    t_max = 50
 
-    init = [np.array([0., 0.]),
-            np.array([0., .97]),
-            np.array([1., 0.]),
-            np.array([-1., 0.])]
+    init = [np.array([2, 0.]),
+            np.array([-2, 0.])]
 
-    res = [simulate(init, seed = seed - 1, std = std, G=G, m1=m1, m2=m2, t_max=t_max) for seed in range(10)]
+    res = [simulate(init, seed = seed - 1, t_max=t_max) for seed in range(10)]
     # res = list(filter(lambda r: r[-1] == True, res))
     print(f"{len(res)}")
 
     for r in res:
-        p1, p2, v1, v2, t_points, _ = r
+        p1, p2, v1, v2, t_points, _, _ = r
+
+        print(f"mp1 {np.mean(p1)}, mp2 {np.mean(p2)}")
 
         # plot position
+        plt.title("Position")
+        plt.plot(p1[0, :], p1[1, :])
+        plt.plot(p2[0, :], p2[1, :])
+    plt.show()
+
+
+    for r in res:
+        p1, p2, v1, v2, t_points, _, _ = r
+
+            # plot position
         plt.title("Position")
         plt.plot(p1[0, :], p1[1, :])
         plt.plot(p2[0, :], p2[1, :])
@@ -95,13 +122,13 @@ if __name__ == '__main__':
         plt.legend()
         plt.show()
 
-        y = np.concatenate([p1, p2, v1, v2])
-        ydot = absolute_motion(_, y)
-        ydot_est = np.stack([(y[:, t] - y[:, t-1])/0.5 for t in range(1, y.shape[-1])], -1)
-        plt.semilogy(np.mean(np.abs(ydot), axis=0))
-        plt.semilogy(np.mean(np.abs(ydot_est), axis=0))
-        plt.semilogy(np.mean(np.abs(ydot[:, 1:] - ydot_est), axis=0))
-        plt.show()
+        # y = np.concatenate([p1, p2, v1, v2])
+        # ydot = absolute_motion(_, y)
+        # ydot_est = np.stack([(y[:, t] - y[:, t-1])/0.5 for t in range(1, y.shape[-1])], -1)
+        # plt.semilogy(np.mean(np.abs(ydot), axis=0))
+        # plt.semilogy(np.mean(np.abs(ydot_est), axis=0))
+        # plt.semilogy(np.mean(np.abs(ydot[:, 1:] - ydot_est), axis=0))
+        # plt.show()
         pass
 
     pass

@@ -12,21 +12,15 @@ from sim_2_body import absolute_motion
 
 
 def test_net(network, data_mean, data_std, seed = -1, conserve=True):
-    G=1.
-    m1=1.
-    m2=1.
     t_0 = 0.
-    std = 0.00015
-    t_max = 600
+    t_max = 100
+    # dt = 0.01
 
+    init = [np.array([2, 0.]),
+            np.array([-2, 0.])]
 
-    init = [np.array([0., 0.]),
-            np.array([0., .97]),
-            np.array([1., 0.]),
-            np.array([-1., 0.])]
-
-    sim = simulate(init, seed = seed, std = std, G=G, m1=m1, m2=m2, t_max=t_max)
-    p1, p2, v1, v2, t_points, _ = sim
+    sim = simulate(init, seed = seed, t_max=t_max)
+    p1, p2, v1, v2, t_points, _, init = sim
 
     skip = 1
     p1 = p1[:, ::skip]
@@ -38,13 +32,23 @@ def test_net(network, data_mean, data_std, seed = -1, conserve=True):
 
     y0 = np.expand_dims(np.stack(init), 0)
 
-    def modelwrap(_, y):
-        y = np.reshape(y, y0.shape)
-        y = torch.tensor(y.astype(np.float32))
-        network.zero_grad()
-        ydot = get_hamiltonian(y, out_y=None, network=network)[1]
-        ydot = ydot.detach().numpy()
-        return ydot.flatten()
+
+    if conserve:
+        def modelwrap(_, y):
+            y = np.reshape(y, [1, 4, 2])
+            y = torch.tensor(y.astype(np.float32))
+            network.zero_grad()
+            ydot = get_hamiltonian(y, out_y=None, network=network)[1]
+            ydot = ydot.detach().numpy()
+            return ydot.flatten()
+    else:
+        def modelwrap(_, y):
+            y = np.reshape(y, [1, 4, 2])
+            y = torch.tensor(y.astype(np.float32))
+            with torch.no_grad():
+                ydot = network(y)
+            ydot = ydot.detach().numpy()
+            return ydot.flatten()        
 
 
     sol = solve_ivp(modelwrap, [t_0, t_max], y0.flatten(), t_eval=t_points)
@@ -75,8 +79,9 @@ def test_net(network, data_mean, data_std, seed = -1, conserve=True):
 
 
 if __name__ == '__main__':
-    seed = 1
+    seed = 150
     conserve = True
+    print(f"conserve: {conserve}")
     network, mean, std = torch.load(f"network_c{conserve}.pt")
     loss, net_out, sim_out = test_net(network, data_mean=mean, data_std=std, seed=seed)
     print(f"loss: {float(loss):2.2f}")

@@ -13,6 +13,9 @@ class Feedforward(torch.nn.Module):
 
         self.activation = torch.nn.Tanh()
 
+        for l in [self.linear1, self.linear2, self.linear3]:
+            torch.nn.init.orthogonal_(l.weight) # use a principled initialization
+
         self.mean = mean
         self.std = std
 
@@ -41,7 +44,11 @@ def get_hamiltonian(in_x, out_y, network):
     
     dh_dx = torch.autograd.grad(net_out.sum(), in_x, create_graph=True)[0]
     dh_dp, dh_dq = torch.split(dh_dx, 2, dim=1)
-    dx_dt_hat = torch.cat([dh_dq, -dh_dp], dim=1)
+    # official code
+    # dx_dt_hat = torch.cat([dh_dq, -dh_dp], dim=1)
+    # paper
+    dx_dt_hat = torch.cat([-dh_dq, dh_dp], dim=1)
+
 
     if out_y is not None:
         loss_fun = torch.nn.MSELoss()
