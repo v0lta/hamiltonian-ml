@@ -5,20 +5,20 @@ from scipy.integrate import solve_ivp
 
 import torch
 import numpy as np
-from networks import Feedforward
+from networks import Feedforward, get_hamiltonian
 from sim_2_body import simulate, get_kinetic_energy, get_potential_energy
+from sim_2_body import absolute_motion
 
 
 
-
-def test_net(network, seed = -1):
+def test_net(network, data_mean, data_std, seed = -1, conserve=True):
     G=1.
     m1=1.
     m2=1.
     t_0 = 0.
-    std = 0.0025
+    std = 0.00015
     t_max = 600
-    dt = 0.5
+
 
     init = [np.array([0., 0.]),
             np.array([0., .97]),
@@ -38,40 +38,53 @@ def test_net(network, seed = -1):
 
     y0 = np.expand_dims(np.stack(init), 0)
 
-    # def modelwrap(_, y):
-    #     y = np.reshape(y, y0.shape)
-    #     y = torch.tensor(y.astype(np.float32))
-    #     with torch.no_grad():
-    #         ydot = network.dxdt(y)
-    #     ydot = ydot.numpy()
-    #     return ydot.flatten()
+    def modelwrap(_, y):
+        y = np.reshape(y, y0.shape)
+        y = torch.tensor(y.astype(np.float32))
+        network.zero_grad()
+        ydot = get_hamiltonian(y, out_y=None, network=network)[1]
+        ydot = ydot.detach().numpy()
+        return ydot.flatten()
 
 
-    # sol = solve_ivp(modelwrap, [t_0, t_max], y0.flatten(), t_eval=t_points)
-    # p1, p2, v1, v2 = np.split(sol.y, 4)
-    # net_out = (p1, p2, v1, v2)
+    sol = solve_ivp(modelwrap, [t_0, t_max], y0.flatten(), t_eval=t_points)
+    p1, p2, v1, v2 = np.split(sol.y, 4)
+    net_out = (p1, p2, v1, v2)
     
+    net_out_inv = net_out
 
-    input_x = torch.tensor(y0.astype(np.float32))
-    output_y_net = [input_x]
-    for _ in range(t_points.shape[-1]-1):
-        out = output_y_net[-1] + dt*network.dxdt(output_y_net[-1])
-        output_y_net.append(out)
-    output_y_net = [torch.squeeze(y_el, 0) for y_el in output_y_net]
-    net_out = torch.stack(output_y_net, -1).detach().numpy()
-    
-    loss = np.mean(list(np.mean((net - sim)**2) for net, sim in zip(net_out, sim_out)))
+    # data_mean = data_mean.squeeze(2).squeeze(-1)
+    # data_std = data_std.squeeze(2).squeeze(-1)
+    # y0 = (y0 - data_mean)/data_std
+
+    #input_x = torch.tensor(y0.astype(np.float32))
+    #output_y_net = [input_x]
+    #for _ in range(t_points.shape[-1]-1):
+    #    if not conserve:
+    #        dx_dt = network(output_y_net[-1])
+    #    else:
+    #        dx_dt = get_hamiltonian(output_y_net[-1], out_y=None, network=network)[1]
+    #    out = output_y_net[-1] + dt*dx_dt
+    #    output_y_net.append(out)
+    #output_y_net = [torch.squeeze(y_el, 0) for y_el in output_y_net]
+    #net_out = torch.stack(output_y_net, -1).detach().numpy()
+    # net_out_inv = (net_out*data_std.transpose([1,2,0])) + data_mean.transpose([1,2,0])
+
+    loss = np.mean(list(np.mean((net - sim)**2) for net, sim in zip(net_out_inv, sim_out[:4])))
     return loss, net_out, sim_out
 
 
 if __name__ == '__main__':
     seed = 1
-    network = torch.load("network_cFalse.pt")
-    loss, net_out, sim_out = test_net(network, seed)
+    conserve = True
+    network, mean, std = torch.load(f"network_c{conserve}.pt")
+    loss, net_out, sim_out = test_net(network, data_mean=mean, data_std=std, seed=seed)
     print(f"loss: {float(loss):2.2f}")
     net_out_numpy = net_out
     net_p1, net_p2, net_v1, net_v2 = (net_out_numpy[i] for i in range(4))
     p1, p2, v1, v2, t_points = sim_out
+
+    print(f"net_out_shape {net_p1.shape}")
 
     # plot position
     plt.plot(p1[0, :], p1[1, :], 'b')
