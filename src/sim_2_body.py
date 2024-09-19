@@ -39,39 +39,32 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
     return ydot
 
 
-def simulate(init, seed = -1, std = 0.01, t_max=2., dt = 0.02, offset=False):
+def simulate(init, seed = -1, std = 0.05, t_max=10., dt = 0.05):
     #     p1, p2, v1, v2 = init
     # shift the position of the ring.
     p1 = init[0]
     p2 = init[1]
-    dist = p2 - p1
     
     if seed >= 0:
         rng = np.random.default_rng(seed)
-        p1_new = p1 + rng.normal(scale=std, size=[2])
+        change = rng.normal(scale=std, size=[2])*p1
+        p1_new = p1 + change / 2.
+        p2_new = p2 + -change / 2.
     else:
         p1_new = p1
-    p2_new = p1_new + dist
-    v1, v2 = get_v_circ(p1, p2)
+        p2_new = p2
+
+    v1, v2 = get_v_circ(p1_new, p2_new)
     init = [p1_new, p2_new, v1, v2]
     
     t_0 = 0.
     steps = int(t_max/dt)
-    t_max_mod = t_max + t_max
-    steps_mod =  int(t_max_mod/dt)
-    t_points = np.linspace(t_0, t_max_mod, steps_mod)
+    t_points = np.linspace(t_0, t_max, steps)
     y0 = np.concatenate(init)
 
-    sol = solve_ivp(absolute_motion, [t_0, t_max_mod], y0, t_eval=t_points)
+    sol = solve_ivp(absolute_motion, [t_0, t_max], y0, t_eval=t_points)
 
-    if seed >= 0 and offset:
-        off_start = int(rng.uniform(0, 1)* steps_mod/2)
-        off_end  = off_start + steps
-        y = sol.y[:, off_start:off_end]
-    else:
-        y = sol.y[:, :steps]
-
-    t_points = t_points[:steps]
+    y = sol.y
 
     p1, p2, v1, v2 = np.split(y, 4)
     return p1, p2, v1, v2, t_points, sol.success, y0
@@ -90,19 +83,18 @@ if __name__ == '__main__':
     G=1.
     m1=1.
     m2=1.
-    t_max = 2
 
-    init = [np.array([.25, 0.]),
-            np.array([-.25, 0.])]
+    init = [np.array([1., 0.]),
+            np.array([-1., 0.])]
 
-    res = [simulate(init, seed = seed - 1, t_max=t_max, offset=True) for seed in range(10)]
+    res = [simulate(init, seed = seed - 1) for seed in range(10)]
     # res = list(filter(lambda r: r[-1] == True, res))
     print(f"{len(res)}")
 
     for r in res:
         p1, p2, v1, v2, t_points, _, _ = r
 
-        print(f"mp1 {np.mean(p1)}, mp2 {np.mean(p2)}")
+        print(f"mean {np.mean(np.stack([p1, p2, v1, v2]))}, std {np.std(np.stack([p1, p2, v1, v2]))}")
 
         # plot position
         plt.title("Position")

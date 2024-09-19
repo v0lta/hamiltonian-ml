@@ -6,7 +6,8 @@ import torch.nn as nn
 import os.path
 import numpy as np
 from tqdm import tqdm
-from networks import Feedforward, get_hamiltonian
+from networks import Feedforward
+from networks import get_hamiltonian_2b as get_hamiltonian
 from test_nn_2_body import test_net
 from multiprocessing.pool import ThreadPool as Pool
 
@@ -21,33 +22,35 @@ def generate_data(iterations, batch_size, seed = 0):
             return data, mean, std
     else:
         seed_offset = seed
-        init = [np.array([.25, 0.]),
-                np.array([-.25, 0.])]
+        init = [np.array([1., 0.]),
+                np.array([-1., 0.])]
 
-
-        data = []
         epoch_list = []
         for _ in tqdm(range(iterations), leave=False):
             # with Pool(4*5) as p:
             #     def sim_fun(s):
             #         return simulate(init, seed = s)
             #     data_epoch = p.map(sim_fun, np.arange(batch_size) + seed_offset - 1)
-            data_epoch = [simulate(init, seed = seed + seed_offset - 1, offset=True) for seed in range(batch_size)]
-            data_epoch = list(filter(lambda r: r[-2] == True, data_epoch))
-            # p1, p2, v1, v2, t_points, _ = r
-            data_epoch_clean = [(de[0], de[1], de[2], de[3]) for de in data_epoch]
-            data_epoch_clean = np.stack(data_epoch_clean, 1)
-            nskip = 1
-            data_epoch_clean_subsample = data_epoch_clean[:, :, :, ::nskip]
-            epoch_list.append(data_epoch_clean_subsample.astype(np.float32))
+            data_epoch = []
+            for seed in range(batch_size):
+                orbit = simulate(init, seed = seed + seed_offset - 1)
+                p1, p2, v1, v2, _, _, _ = orbit
+                if orbit[-2] == True:
+                    pq_vec = np.stack([p1, p2, v1, v2], 0)
+                    pairs = (pq_vec[:, :, 0::2], pq_vec[:, :, 1::2])
+                    pairs = np.stack(pairs, 0)
+                    data_epoch.append(pairs)
+            
+            data_epoch = np.stack(data_epoch, 0)
+            epoch_list.append(data_epoch.astype(np.float32))
             seed_offset += batch_size
 
         data = np.stack(epoch_list)
-        mean = np.mean(data, axis=(0, 2, 4)) 
-        std = np.std(data, axis=(0, 2, 4))
+        mean = np.mean(data, axis=(0, 1, 2, 5)) 
+        std = np.std(data, axis=(0, 1, 2, 5))
 
-        mean = np.expand_dims(mean, (0, 2, 4))
-        std = np.expand_dims(std, (0, 2, 4))
+        mean = np.expand_dims(mean, (0, 1, 2, 5))
+        std = np.expand_dims(std, (0, 1, 2, 5))
 
         with open("data/twobody.pkl", "wb") as f:
             pickle.dump([data, mean, std], f)
@@ -60,13 +63,13 @@ if __name__ == '__main__':
     torch.manual_seed(42)
     rng = np.random.default_rng(42)
 
-    epochs = 20
+    epochs = 10
     batch_size = 200
-    iterations = 400
+    iterations = 10
     conserve = True
     vars = 4
     dims = 2
-    dt = 0.02
+    dt = 0.05
     in_size = dims*vars
     out_size = 1 if conserve else in_size
 
@@ -78,7 +81,7 @@ if __name__ == '__main__':
     print(f"data mean {np.mean(data)}, data std {np.std(data)}")
     print(f"data shape {data.shape}")
 
-    network = Feedforward(in_size, 256, out_size).cuda()
+    network = Feedforward(in_size, 200, out_size).cuda()
     opt = torch.optim.Adam(network.parameters(), lr=1e-3)
     loss_fun = torch.nn.MSELoss()
 
@@ -89,38 +92,39 @@ if __name__ == '__main__':
     for e in tqdm(range(epochs), desc="Training Network"):
         epoch_bar = tqdm(range(iterations), desc=f"Epoch progress, last test loss {test_loss}", leave=False)
         for i in epoch_bar:
-            time_points = list(range(0, data[i].shape[-1] - 1, 2))
-            rng.shuffle(time_points)
-            bar = tqdm(time_points, desc="Time Loop", leave=False)
+            rng.shuffle(data, axis=-1)
+            bar = tqdm(range(data.shape[-1]), desc="Time Loop", leave=False)
             for t in bar:
-                input_x = torch.tensor(data[i][:, :, :, t].swapaxes(0, 1), requires_grad=True).cuda()
-                input_x.retain_grad()
-                output_y = torch.tensor(data[i][:, :, :, t+1].swapaxes(0, 1)).cuda()
-                opt.zero_grad()
+                xy = data[i, :, :, :, :, t]
+                input_x = torch.tensor(xy[:, 0, :, :], requires_grad=True).cuda()
+                # input_x += torch.randn_like(input_x)*0.01
+                output_y = torch.tensor(xy[:, 1, :, :]).cuda()
+
+                input_x = input_x*0 + torch.tensor([[1, 1], [-1, -1], [-0, 0], [-0, 0]]).unsqueeze(0).cuda()
+                output_y = input_x
 
                 if conserve:
-                    conservation_loss, dx_dt_hat, dx_dt = get_hamiltonian(input_x, output_y, network)
-                    loss = conservation_loss
+                    loss, dx_dt_hat, dx_dt = get_hamiltonian(input_x, output_y, network)
                 else:
                     dx_dt = torch.tensor(absolute_motion(None, input_x.detach().cpu().numpy().swapaxes(0, 1))
                                          ).to(input_x.device).swapdims(0, 1)
                     dx_dt_hat = network(input_x)
                     dx_dt_hat = torch.reshape(dx_dt_hat, [batch_size, 4, 2])
-                    direct_loss = loss_fun(dx_dt_hat, dx_dt)
-                    loss = direct_loss
+                    loss = loss_fun(dx_dt_hat, dx_dt)
                     conservation_loss = torch.tensor(0.)
+
+                loss.backward()
+                opt.step()
 
                 y_hat =  input_x + dt*dx_dt_hat
                 pred_loss = loss_fun(output_y, y_hat)
 
-                loss.backward()
-                opt.step()
-                dloss = pred_loss.detach().cpu().numpy()
-                deng = conservation_loss.detach().cpu().numpy()
+                dploss = pred_loss.detach().cpu().numpy()
+                dloss = loss.detach().cpu().numpy()
 
                 grad = torch.cat([param.grad.flatten() for param in network.parameters()]).clone()
-
-                bar.set_description(f"Prediction loss: {dloss:.4e}, Energy: {deng:.4e}, grad-norm: {torch.linalg.norm(grad):.4e}, grad-std: {torch.linalg.norm(grad):.4e}")
+                opt.zero_grad()
+                bar.set_description(f"Prediction loss: {dploss:.4e}, Energy: {dloss:.4e}, grad-norm: {torch.linalg.norm(grad):.4e}, grad-std: {torch.linalg.norm(grad):.4e}")
             network.cpu()
             if e % 1 == 0:
                 test_loss, _, _ = test_net(network, seed=-1)

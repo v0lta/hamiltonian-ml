@@ -3,7 +3,7 @@ from sim_2_body import absolute_motion
 
 class Feedforward(torch.nn.Module):
     '''A standard MLP'''
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, output_dim, baseline=False, state_size=1):
         super().__init__()
         self.input_dim = input_dim
         self.linear1 = torch.nn.Linear(input_dim, hidden_dim)
@@ -12,6 +12,8 @@ class Feedforward(torch.nn.Module):
         self.linear4 = torch.nn.Linear(hidden_dim, output_dim, bias=None)
 
         self.activation = torch.nn.Tanh()
+        self.baseline = baseline
+        self.state_size = state_size
 
         # for l in [self.linear1, self.linear2, self.linear4]:
         #     torch.nn.init.orthogonal_(l.weight) # use a principled initialization
@@ -19,17 +21,30 @@ class Feedforward(torch.nn.Module):
 
     def forward(self, x):
         batch_size, _, _ = x.shape
-        x_re = torch.reshape(x, [batch_size, self.input_dim]).unsqueeze(1)
+        x_re = torch.reshape(x, [batch_size, self.input_dim])
         h = self.activation(self.linear1(x_re))
         h = self.activation(self.linear2(h))
         # h = self.activation(self.linear3(h))
         h = self.linear4(h)
         return h
     
+    def time_derivative(self, x):
+        if self.baseline:
+            return self.forward(x)
+        else:
+            x.requires_grad_()
+            net_out = self.forward(x)
+            dh_dx = torch.autograd.grad(net_out.sum(), x, create_graph=True)[0]
+            dh_dp, dh_dq = torch.split(dh_dx, self.state_size, dim=1)
+            dh_dp, dh_dq = torch.split(dh_dx, self.state_size, dim=1)
+            # official code
+            # dx_dt_hat = torch.cat([dh_dq, -dh_dp], dim=1)
+            # paper
+            dx_dt_hat = torch.cat([-dh_dq, dh_dp], dim=1)
+            return dx_dt_hat
 
-
-def get_hamiltonian(in_x, out_y, network):
-    in_x.requires_grad_()
+def get_hamiltonian_2b(in_x, out_y, network):
+    
     net_out = network(in_x)
 
     # p1, p2, v1, v2
