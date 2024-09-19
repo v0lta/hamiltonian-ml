@@ -21,8 +21,9 @@ def generate_data(iterations, batch_size, seed = 0):
             return data, mean, std
     else:
         seed_offset = seed
-        init = [np.array([2, 0.]),
-                np.array([-2, 0.])]
+        init = [np.array([.25, 0.]),
+                np.array([-.25, 0.])]
+
 
         data = []
         epoch_list = []
@@ -31,7 +32,7 @@ def generate_data(iterations, batch_size, seed = 0):
             #     def sim_fun(s):
             #         return simulate(init, seed = s)
             #     data_epoch = p.map(sim_fun, np.arange(batch_size) + seed_offset - 1)
-            data_epoch = [simulate(init, seed = seed + seed_offset - 1) for seed in range(batch_size)]
+            data_epoch = [simulate(init, seed = seed + seed_offset - 1, offset=True) for seed in range(batch_size)]
             data_epoch = list(filter(lambda r: r[-2] == True, data_epoch))
             # p1, p2, v1, v2, t_points, _ = r
             data_epoch_clean = [(de[0], de[1], de[2], de[3]) for de in data_epoch]
@@ -61,25 +62,24 @@ if __name__ == '__main__':
 
     epochs = 20
     batch_size = 200
-    iterations = 200
+    iterations = 400
     conserve = True
     vars = 4
     dims = 2
-    dt = 0.5
+    dt = 0.02
     in_size = dims*vars
     out_size = 1 if conserve else in_size
 
     data, mean, std = generate_data(iterations, batch_size, seed=0)
-    mean = mean*0.
-    std = std*0 + 1.
+
 
     # data = (data - mean)/std
     print(f"Conserve: {conserve}")
     print(f"data mean {np.mean(data)}, data std {np.std(data)}")
     print(f"data shape {data.shape}")
 
-    network = Feedforward(in_size, 512, out_size, mean, std).cuda()
-    opt = torch.optim.Adam(network.parameters(), lr=1e-5)
+    network = Feedforward(in_size, 256, out_size).cuda()
+    opt = torch.optim.Adam(network.parameters(), lr=1e-3)
     loss_fun = torch.nn.MSELoss()
 
     print(f"energy conservation: {conserve}")
@@ -88,18 +88,15 @@ if __name__ == '__main__':
 
     for e in tqdm(range(epochs), desc="Training Network"):
         epoch_bar = tqdm(range(iterations), desc=f"Epoch progress, last test loss {test_loss}", leave=False)
-        for e in epoch_bar:
-            time_pairs = [(t, t+1) for t in range(data[e].shape[-1] - 1)]
-            rng.shuffle(time_pairs)
-            bar = tqdm(time_pairs, desc="Time Loop", leave=False)
-            for t, tpone in bar:
-                input_x = torch.tensor(data[e][:, :, :, t].swapaxes(0, 1), requires_grad=True).cuda()
+        for i in epoch_bar:
+            time_points = list(range(0, data[i].shape[-1] - 1, 2))
+            rng.shuffle(time_points)
+            bar = tqdm(time_points, desc="Time Loop", leave=False)
+            for t in bar:
+                input_x = torch.tensor(data[i][:, :, :, t].swapaxes(0, 1), requires_grad=True).cuda()
                 input_x.retain_grad()
-                output_y = torch.tensor(data[e][:, :, :, tpone].swapaxes(0, 1)).cuda()
+                output_y = torch.tensor(data[i][:, :, :, t+1].swapaxes(0, 1)).cuda()
                 opt.zero_grad()
-
-                input_x = input_x + torch.randn_like(input_x)*0.001
-
 
                 if conserve:
                     conservation_loss, dx_dt_hat, dx_dt = get_hamiltonian(input_x, output_y, network)
@@ -123,11 +120,12 @@ if __name__ == '__main__':
 
                 grad = torch.cat([param.grad.flatten() for param in network.parameters()]).clone()
 
-                bar.set_description(f"Prediction loss: {dloss:3.8f}, Energy: {deng:3.8f}, Grad-Norm: {torch.linalg.norm(grad):2.6f}")
+                bar.set_description(f"Prediction loss: {dloss:.4e}, Energy: {deng:.4e}, grad-norm: {torch.linalg.norm(grad):.4e}, grad-std: {torch.linalg.norm(grad):.4e}")
             network.cpu()
-            test_loss, _, _ = test_net(network, seed=-1, data_mean=mean, data_std=std)
-            epoch_bar.set_description(f"Epoch progress, test-loss: {float(test_loss):2.2f}")
-            torch.save([network, mean, std], f"network_c{conserve}.pt")
+            if e % 1 == 0:
+                test_loss, _, _ = test_net(network, seed=-1)
+                epoch_bar.set_description(f"Epoch progress, test-loss: {float(test_loss):.4e}")
+                torch.save([network, mean, std], f"network_c{conserve}.pt")
             network.cuda()
             
 

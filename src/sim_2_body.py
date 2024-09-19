@@ -29,7 +29,7 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
     # get gravitational forces
     grav = get_grav_force(G, m1, m2, dist_r)
     # add direction
-    fg1 = grav * dist_r / norm(dist_r)
+    fg1 = grav * dist_r / (norm(dist_r) + 1e-12)
     fg2 = - fg1
     
     a1 = fg1/m1
@@ -39,12 +39,13 @@ def absolute_motion(_, y, G=1., m1=1., m2=1.):
     return ydot
 
 
-def simulate(init, seed = -1, std = 0.05, t_max=50., dt = 0.5):
+def simulate(init, seed = -1, std = 0.01, t_max=2., dt = 0.02, offset=False):
     #     p1, p2, v1, v2 = init
     # shift the position of the ring.
     p1 = init[0]
     p2 = init[1]
     dist = p2 - p1
+    
     if seed >= 0:
         rng = np.random.default_rng(seed)
         p1_new = p1 + rng.normal(scale=std, size=[2])
@@ -53,21 +54,33 @@ def simulate(init, seed = -1, std = 0.05, t_max=50., dt = 0.5):
     p2_new = p1_new + dist
     v1, v2 = get_v_circ(p1, p2)
     init = [p1_new, p2_new, v1, v2]
-        
+    
     t_0 = 0.
     steps = int(t_max/dt)
-    t_points = np.linspace(t_0, t_max, steps)
+    t_max_mod = t_max + t_max
+    steps_mod =  int(t_max_mod/dt)
+    t_points = np.linspace(t_0, t_max_mod, steps_mod)
     y0 = np.concatenate(init)
 
-    sol = solve_ivp(absolute_motion, [t_0, t_max], y0, t_eval=t_points)
-    p1, p2, v1, v2 = np.split(sol.y, 4)
+    sol = solve_ivp(absolute_motion, [t_0, t_max_mod], y0, t_eval=t_points)
+
+    if seed >= 0 and offset:
+        off_start = int(rng.uniform(0, 1)* steps_mod/2)
+        off_end  = off_start + steps
+        y = sol.y[:, off_start:off_end]
+    else:
+        y = sol.y[:, :steps]
+
+    t_points = t_points[:steps]
+
+    p1, p2, v1, v2 = np.split(y, 4)
     return p1, p2, v1, v2, t_points, sol.success, y0
 
 
 def get_v_circ(p1, p2):
     d = p2 - p1
     r = np.sqrt( np.sum(d **2))
-    v = np.sqrt( 1/r ) / 2.
+    v = np.sqrt( 1/(r + 1e-12 )) / 2.
 
     v1 = v*np.flipud(d)/norm(d)
     v2 = -v*np.flipud(d)/norm(d)
@@ -77,12 +90,12 @@ if __name__ == '__main__':
     G=1.
     m1=1.
     m2=1.
-    t_max = 50
+    t_max = 2
 
-    init = [np.array([2, 0.]),
-            np.array([-2, 0.])]
+    init = [np.array([.25, 0.]),
+            np.array([-.25, 0.])]
 
-    res = [simulate(init, seed = seed - 1, t_max=t_max) for seed in range(10)]
+    res = [simulate(init, seed = seed - 1, t_max=t_max, offset=True) for seed in range(10)]
     # res = list(filter(lambda r: r[-1] == True, res))
     print(f"{len(res)}")
 

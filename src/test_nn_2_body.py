@@ -11,13 +11,12 @@ from sim_2_body import absolute_motion
 
 
 
-def test_net(network, data_mean, data_std, seed = -1, conserve=True):
+def test_net(network, seed = -1, conserve=True):
     t_0 = 0.
-    t_max = 100
-    # dt = 0.01
+    t_max = 2
+    init = [np.array([.25, 0.]),
+            np.array([-.25, 0.])]
 
-    init = [np.array([2, 0.]),
-            np.array([-2, 0.])]
 
     sim = simulate(init, seed = seed, t_max=t_max)
     p1, p2, v1, v2, t_points, _, init = sim
@@ -79,12 +78,12 @@ def test_net(network, data_mean, data_std, seed = -1, conserve=True):
 
 
 if __name__ == '__main__':
-    seed = 150
+    seed = 4
     conserve = True
     print(f"conserve: {conserve}")
     network, mean, std = torch.load(f"network_c{conserve}.pt")
-    loss, net_out, sim_out = test_net(network, data_mean=mean, data_std=std, seed=seed)
-    print(f"loss: {float(loss):2.2f}")
+    loss, net_out, sim_out = test_net(network, seed=seed)
+    print(f"loss: {float(loss):.4e}")
     net_out_numpy = net_out
     net_p1, net_p2, net_v1, net_v2 = (net_out_numpy[i] for i in range(4))
     p1, p2, v1, v2, t_points = sim_out

@@ -3,28 +3,26 @@ from sim_2_body import absolute_motion
 
 class Feedforward(torch.nn.Module):
     '''A standard MLP'''
-    def __init__(self, input_dim, hidden_dim, output_dim, mean, std):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.input_dim = input_dim
         self.linear1 = torch.nn.Linear(input_dim, hidden_dim)
         self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.linear3 = torch.nn.Linear(hidden_dim, hidden_dim)
+        # self.linear3 = torch.nn.Linear(hidden_dim, hidden_dim)
         self.linear4 = torch.nn.Linear(hidden_dim, output_dim, bias=None)
 
         self.activation = torch.nn.Tanh()
 
-        for l in [self.linear1, self.linear2, self.linear3]:
-            torch.nn.init.orthogonal_(l.weight) # use a principled initialization
+        # for l in [self.linear1, self.linear2, self.linear4]:
+        #     torch.nn.init.orthogonal_(l.weight) # use a principled initialization
 
-        self.mean = mean
-        self.std = std
 
     def forward(self, x):
         batch_size, _, _ = x.shape
         x_re = torch.reshape(x, [batch_size, self.input_dim]).unsqueeze(1)
         h = self.activation(self.linear1(x_re))
         h = self.activation(self.linear2(h))
-        h = self.activation(self.linear3(h))
+        # h = self.activation(self.linear3(h))
         h = self.linear4(h)
         return h
     
@@ -52,6 +50,7 @@ def get_hamiltonian(in_x, out_y, network):
 
     if out_y is not None:
         loss_fun = torch.nn.MSELoss()
+        # loss_fun = torch.nn.HuberLoss()
         conservation_loss = loss_fun(dx_dt, dx_dt_hat)
     else:
         conservation_loss = None
