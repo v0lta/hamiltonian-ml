@@ -55,6 +55,8 @@ def simulate(init, seed = -1, std = 0.05, t_max=10., dt = 0.05):
         p2_new = p2
 
     v1, v2 = get_v_circ(p1_new, p2_new)
+    # v1 = np.array([0, 1.])
+    # v2 = np.array([0, 1.])
     init = [p1_new, p2_new, v1, v2]
     
     t_0 = 0.

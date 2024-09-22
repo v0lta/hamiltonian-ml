@@ -11,11 +11,12 @@ def normalize(vec):
     return vec /np.linalg.norm(vec, 1)
 
 
-def market_sim(init, exp_return, time):
-
+def market_sim(init, exp_return, time, rng):
+    dt = time[1] - time[0]
     prices = [init]
     dxdts= []
-    for t in time:
+    sigma = 0.8
+    for _ in time:
         dxdt =  price_derivative_fun(prices[-1], exp_return, dt, sigma, rng)
         new_values = prices[-1] + dt *dxdt
         norm_new_values = normalize(new_values)
@@ -33,11 +34,11 @@ if __name__ == '__main__':
     dt = 0.1
 
     time = np.arange(0, t, dt)
-    exp_return = np.array([.1, 0., -.1])
-    sigma = 0.8
+    exp_return = np.array([.1, 0.])
 
-    start_price = normalize(np.array([5, 4, 3]))
-    prices, _ = market_sim(start_price, exp_return, time)
+
+    start_price = normalize(np.array([5, 4]))
+    prices, _ = market_sim(start_price, exp_return, time,)
 
     plt.title("Titel Preise")
     plt.plot(time, prices[:-1])
